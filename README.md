@@ -2,6 +2,8 @@
 
 This little application is designed to allow players and modders of the VR retro arcade exerience, Age of Joy, to view arcade cabinets on their PC. AoJCabViewer will load the files and data from the folder and construct the cab as it would be in the game.
 
+You can download the compiled project from [Itch.io](https://b3agz.itch.io/aoj-cab-viewer).
+
 Click "Load Cabinet" in the top left corner to load a folder. Folders must contain at least a "description.yaml" file and a *.glb file to for AoJCabViewer to load them.
 
 Once loaded, use the right mouse button to rotate the camera, the left button to move around, and the scroll wheel to zoom in and out.
