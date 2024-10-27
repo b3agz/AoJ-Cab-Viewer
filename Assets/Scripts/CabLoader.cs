@@ -3,6 +3,7 @@ using UnityEngine.Events;
 using UnityGLTF;
 using System.Collections;
 using System.IO;
+using System.IO.Compression;
 using System.Collections.Generic;
 using System;
 using AoJCabViewer.Cabinets;
@@ -85,6 +86,138 @@ namespace AoJCabViewer {
             } else {
                 MCP.LogError($"Folder not found at: {folderPath}");
                 _badFolderDialogue.SetActive(true);
+            }
+        }
+
+        /// <summary>
+        /// Loads a new cab from a zip file. Folder must contain at least a "description.yaml"
+        /// and *.glb file to be loaded. *.glb file must match the name specified in the YAML.
+        /// </summary>
+        /// <param name="zipFilePath"></param>
+        public void LoadFromZip(string zipFilePath) {
+
+            // Check if the zip file exists
+            if (File.Exists(zipFilePath)) {
+
+                if (Cab != null && Cab.HasModel) {
+                    Destroy(Cab.Model.GameObject);
+                    Cab = null;
+                }
+
+                MCP.Instance.CabDetailsWindow.ClearWindow();
+
+                using ZipArchive archive = ZipFile.OpenRead(zipFilePath);
+
+                // Find the "description.yaml" entry in the zip
+                ZipArchiveEntry yamlEntry = archive.GetEntry("description.yaml");
+
+                if (yamlEntry == null) {
+                    MCP.LogError($"Failed to find description.yaml in zip file.");
+                    _badFolderDialogue.SetActive(true);
+                    return;
+                }
+
+                // Read the YAML file and populate a new Data class
+                Data cab = null;
+                using (Stream yamlStream = yamlEntry.Open()) {
+                    using (StreamReader reader = new StreamReader(yamlStream)) {
+                        string yamlContent = reader.ReadToEnd();
+                        cab = YAMLParser.LoadYamlData(yamlContent);
+                    }
+                }
+
+                if (cab == null) {
+                    MCP.LogError($"Failed to load description.yaml from zip file.");
+                    _badFolderDialogue.SetActive(true);
+                    return;
+                }
+
+                // Generate a list of all the images in the zip and check them against our cab data
+                List<string> imageExtensions = new List<string> { ".png", ".jpg", ".jpeg", ".bmp", ".gif" };
+                List<ZipArchiveEntry> imageEntries = new List<ZipArchiveEntry>();
+
+                foreach (ZipArchiveEntry entry in archive.Entries) {
+                    string extension = Path.GetExtension(entry.Name).ToLower();
+                    if (imageExtensions.Contains(extension)) {
+                        imageEntries.Add(entry);
+                    }
+                }
+
+                LoadImagesFromZipEntries(imageEntries, cab);
+
+                // Get the path to the cab model, file name specified in YAML data
+                string glbFileName = cab.Model.File;
+
+                // Find the GLB file in the zip
+                ZipArchiveEntry glbEntry = archive.GetEntry(glbFileName);
+
+                if (glbEntry != null) {
+                    // Load the GLB file from the zip entry
+                    string tempGlbPath = Path.Combine(Path.GetTempPath(), glbFileName);
+                    using (Stream glbStream = glbEntry.Open())
+                    using (FileStream tempFileStream = File.Create(tempGlbPath)) {
+                        glbStream.CopyTo(tempFileStream);
+                    }
+
+                    // Load the GLB file
+                    GLTFingiemabob.GLTFUri = new Uri(tempGlbPath).AbsoluteUri;
+                    GLTFingiemabob.Load();
+
+                    // Delete the temp file after loading
+                    File.Delete(tempGlbPath);
+
+                } else {
+                    MCP.LogError($"The .glb file '{cab.Model.File}' was not found in the zip file.");
+                    _badFolderDialogue.SetActive(true);
+                    return;
+                }
+
+                Cab = cab;
+
+            } else {
+                MCP.LogError($"Zip file not found at: {zipFilePath}");
+                _badFolderDialogue.SetActive(true);
+            }
+        }
+
+        /// <summary>
+        /// Loads images from a zip file and puts them into a Cabinets.Data class as Texture2Ds.
+        /// </summary>
+        /// <param name="imageEntries">List of zip entries.</param>
+        /// <param name="cab">The Cabinets.Data class to put the textures in.</param>
+        private void LoadImagesFromZipEntries(List<ZipArchiveEntry> imageEntries, Data cab) {
+            foreach (ZipArchiveEntry imageEntry in imageEntries) {
+                string name = Path.GetFileNameWithoutExtension(imageEntry.Name);
+                using (Stream imageStream = imageEntry.Open()) {
+                    byte[] imageData;
+                    using (MemoryStream ms = new MemoryStream()) {
+                        imageStream.CopyTo(ms);
+                        imageData = ms.ToArray();
+                    }
+
+                    // Process the imageData as needed (e.g., create a Texture2D)
+                    Texture2D texture = new Texture2D(2, 2);
+                    if (texture.LoadImage(imageData)) {
+                        // Successfully loaded image
+
+                        texture.LoadImage(imageData);
+
+                        // Loop through each part in the cab to see if any of the part names match the name of this image.
+                        foreach (Part part in cab.Parts) {
+                            if (part.Name.Equals(name)) {
+
+                                // If we find a match, assign the image to that part and break out of the inner loop.
+                                part.Art ??= new();
+                                part.Art.Texture = texture;
+                                break;
+                            }
+                        }
+
+
+                    } else {
+                        MCP.LogError($"Failed to load image {imageEntry.FullName} from zip file.");
+                    }
+                }
             }
         }
 

@@ -42,12 +42,12 @@ namespace AoJCabViewer.IO {
             // Set filters (optional)
             // It is sufficient to set the filters just once (instead of each time before showing the file browser dialog), 
             // if all the dialogs will be using the same filters
-            //FileBrowser.SetFilters(true, new FileBrowser.Filter("GLB Files", ".gltf", ".glb"));
+            FileBrowser.SetFilters(true, new FileBrowser.Filter("AoJ CAB Files", ".zip", ".yaml", ".glb"));
 
             // Set default filter that is selected when the dialog is shown (optional)
             // Returns true if the default filter is set successfully
             // In this case, set Images filter as the default filter
-            //FileBrowser.SetDefaultFilter(".glb");
+            FileBrowser.SetDefaultFilter(".zip");
 
             // Set excluded file extensions (optional) (by default, .lnk and .tmp extensions are excluded)
             // Note that when you use this function, .lnk and .tmp extensions will no longer be
@@ -89,23 +89,55 @@ namespace AoJCabViewer.IO {
             StartCoroutine(ShowLoadDialogCoroutine());
         }
 
+        //IEnumerator ShowLoadDialogCoroutine() {
+        //    // Show a load file dialog and wait for a response from user
+        //    // Load file/folder: file, Allow multiple selection: true
+        //    // Initial path: default (Documents), Initial filename: empty
+        //    // Title: "Load File", Submit button text: "Load"
+        //    yield return FileBrowser.WaitForLoadDialog(FileBrowser.PickMode.FilesAndFolders, true, null, null, "Select Cab", "Load");
+
+        //    // Dialog is closed
+        //    // Print whether the user has selected some files or cancelled the operation (FileBrowser.Success)
+        //    //MCP.Log(FileBrowser.Success);
+
+
+
+        //    if (FileBrowser.Success) {
+        //        //OnFilesSelected(FileBrowser.Result); // FileBrowser.Result is null, if FileBrowser.Success is false
+        //        //StartCoroutine(LoadGLBFileCoroutine(FileBrowser.Result[0]));
+        //        MCP.Instance.CabLoader.LoadFromFolder(FileBrowser.Result[0]);
+        //    }
+        //}
+
         IEnumerator ShowLoadDialogCoroutine() {
-            // Show a load file dialog and wait for a response from user
-            // Load file/folder: file, Allow multiple selection: true
-            // Initial path: default (Documents), Initial filename: empty
-            // Title: "Load File", Submit button text: "Load"
-            yield return FileBrowser.WaitForLoadDialog(FileBrowser.PickMode.Folders, true, null, null, "Select Folder", "Load");
-
-            // Dialog is closed
-            // Print whether the user has selected some files or cancelled the operation (FileBrowser.Success)
-            //MCP.Log(FileBrowser.Success);
-
-
+            // Show a load dialog and wait for a response from the user
+            yield return FileBrowser.WaitForLoadDialog(FileBrowser.PickMode.FilesAndFolders, true, null, null, "Select Cab", "Load");
 
             if (FileBrowser.Success) {
-                //OnFilesSelected(FileBrowser.Result); // FileBrowser.Result is null, if FileBrowser.Success is false
-                //StartCoroutine(LoadGLBFileCoroutine(FileBrowser.Result[0]));
-                MCP.Instance.CabLoader.LoadFromFolder(FileBrowser.Result[0]);
+                string selectedPath = FileBrowser.Result[0];
+
+                // Determine if the selected path is a file or folder
+                if (Directory.Exists(selectedPath)) {
+                    // If it's a folder, load the folder directly
+                    MCP.Instance.CabLoader.LoadFromFolder(selectedPath);
+                } else if (File.Exists(selectedPath)) {
+                    // Check file extension
+                    string extension = Path.GetExtension(selectedPath).ToLower();
+
+                    if (extension == ".zip") {
+                        // Handle zip files differently, pass the full path
+                        MCP.Instance.CabLoader.LoadFromZip(selectedPath);
+                    } else if (extension == ".glb" || extension == ".yaml") {
+                        // If it's a .glb or .yaml file, pass the folder path (minus the filename)
+                        string folderPath = Path.GetDirectoryName(selectedPath);
+                        MCP.Instance.CabLoader.LoadFromFolder(folderPath);
+                    } else {
+                        // Handle unsupported file types if needed
+                        Debug.LogError("Unsupported file type selected.");
+                    }
+                } else {
+                    Debug.LogError("Selected path is neither a file nor a directory.");
+                }
             }
         }
 
